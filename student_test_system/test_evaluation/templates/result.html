@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Student Result</title>
+</head>
+<body>
+    <h1>Check Your Result</h1>
+    <form method="GET">
+        <input type="text" name="roll_no" placeholder="Enter Roll Number">
+        <button type="submit">Check</button>
+    </form>
+    {% if student %}
+        <h2>Roll No: {{ student.roll_no }}</h2>
+        <p>Marks: {{ student.marks }}/10</p>
+        <p>Feedback: {{ student.feedback }}</p>
+    {% endif %}
+</body>
+</html>
