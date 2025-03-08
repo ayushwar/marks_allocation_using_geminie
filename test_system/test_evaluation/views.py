@@ -17,7 +17,7 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
     serializer_class = StudentAnswerSerializer
 
 # Initialize Google Gemini API
-llm = GoogleGenerativeAI(model="gemini-1.5-pro-latest", api_key="AIzaSyDS99c8Ycr8razMXQJv4aOK_a_U6jIU3Ks")
+llm = GoogleGenerativeAI(model="gemini-1.5-pro-latest", api_key="")
 
 evaluation_prompt = PromptTemplate(
     input_variables=["question", "student_answer"],
