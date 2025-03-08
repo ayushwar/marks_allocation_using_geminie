@@ -20,6 +20,12 @@
 
 from django.db import models
 
+
+class EligibleStudent(models.Model):
+    roll_no = models.CharField(max_length=20, unique=True)
+    def __str__(self):
+        return self.roll_no
+
 class StudentExam(models.Model):
     # Fixed paper details (only one paper)
     PAPER_NAME = "Computer Science"
@@ -31,8 +37,10 @@ class StudentExam(models.Model):
     paper_code = models.CharField(max_length=20, default=PAPER_CODE, editable=False)
     question = models.TextField()
     student_answer = models.TextField(blank=True, null=True)  # Student's answer field
-    marks = models.FloatField(default=0.0)  # Initially set to 0
+    marks = models.FloatField(blank=True, null=True,default=0.0)  # Initially set to 0
     feedback = models.TextField(blank=True, null=True)
+    evaluation_result = models.TextField(blank=True, null=True)
+    # marks = models.IntegerField(blank=True, null=True) 
 
     def __str__(self):
         return f"{self.student_name} - {self.roll_no}"

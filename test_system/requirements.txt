@@ -1,0 +1,23 @@
+# Core Django Framework
+Django==5.1.6
+
+# Database Support
+djangorestframework==3.14.0  # If using REST APIs
+django-environ==0.11.2       # For environment variables (recommended)
+mysqlclient==2.2.4           # If using MySQL
+psycopg2-binary==2.9.9       # If using PostgreSQL
+
+# Google Gemini API
+google-generativeai==0.4.0  # For integrating Gemini AI
+
+# Data Processing
+numpy==1.24.2
+pandas==1.5.3
+
+# PDF Handling (For Answer Submission in PDF Format)
+PyMuPDF==1.23.3  # Faster PDF processing (MuPDF)
+pdfplumber==0.10.2  # Extract text from PDFs
+
+# Other Useful Packages
+gunicorn==21.2.0  # For deploying Django app
+whitenoise==6.6.0  # Static file management

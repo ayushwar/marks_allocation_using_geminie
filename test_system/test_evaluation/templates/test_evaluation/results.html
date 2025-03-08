@@ -1,0 +1,20 @@
+<h2>Student Results</h2>
+
+<p><strong>Name:</strong> {{ student.student_name }}</p>
+<p><strong>Roll Number:</strong> {{ student.roll_no }}</p>
+<p><strong>Question:</strong> {{ student.question }}</p>
+<p><strong>Answer:</strong> {{ student.student_answer }}</p>
+
+{% if student.evaluation_result %}
+    <h3>AI Evaluation:</h3>
+    <p>{{ student.evaluation_result }}</p>
+{% else %}
+    <p>No evaluation available.</p>
+{% endif %}
+
+{% if student.marks is not None %}
+    <h3>Marks:</h3>
+    <p><strong>{{ student.marks }}/10</strong></p>
+{% else %}
+    <p>Marks not available.</p>
+{% endif %}

@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework import viewsets
 from .models import StudentExam
 from .serializers import StudentAnswerSerializer
@@ -6,24 +6,19 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from langchain_google_genai import GoogleGenerativeAI
 from langchain.prompts import PromptTemplate
-from langchain.schema.runnable import RunnableLambda
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema.runnable import RunnableSequence
-from .models import StudentExam
-
-from django.urls import get_resolver
-from django.http import JsonResponse
-
+from langchain.schema.runnable import RunnableLambda, RunnablePassthrough, RunnableSequence
+from .forms import StudentLoginForm, AnswerForm
+import re
+from django.urls import reverse
+from .models import StudentExam, EligibleStudent
 
 class StudentAnswerViewSet(viewsets.ModelViewSet):
     queryset = StudentExam.objects.all()
     serializer_class = StudentAnswerSerializer
 
-
 # Initialize Google Gemini API
-llm = GoogleGenerativeAI(model="gemini-1.5-pro-latest", api_key="")
+llm = GoogleGenerativeAI(model="gemini-1.5-pro-latest", api_key="AIzaSyDS99c8Ycr8razMXQJv4aOK_a_U6jIU3Ks")
 
-# Define a prompt template for evaluating the answer
 evaluation_prompt = PromptTemplate(
     input_variables=["question", "student_answer"],
     template="""
@@ -39,66 +34,154 @@ evaluation_prompt = PromptTemplate(
     """
 )
 
-# ✅ Use RunnableSequence Instead of LLMChain
-evaluation_chain = (
-    RunnablePassthrough()
-    | evaluation_prompt
-    | llm
+evaluation_chain = RunnableSequence(
+    RunnablePassthrough() | evaluation_prompt | llm
 )
 
-
-# Define the evaluation chain
-evaluation_chain = RunnablePassthrough() | evaluation_prompt | llm
-
-# Function to evaluate student answers using Gemini AI
 def evaluate_student_answer(question, student_answer):
     evaluation_result = evaluation_chain.invoke({
         "question": question,
         "student_answer": student_answer
     })
-
-    # Print raw response for debugging
+    
     print("Raw Evaluation Response:", evaluation_result)
-
-    # Handle different response formats
+    
     if isinstance(evaluation_result, dict):
-        return evaluation_result.get("text", "No text response from Gemini AI")
+        return evaluation_result.get("text", "No response from AI")
     elif isinstance(evaluation_result, str):
-        return evaluation_result  # Return as is if response is a string
+        return evaluation_result
     else:
-        return "Error: Unexpected response format from Gemini AI"
+        return "Error: Unexpected AI response format"
+    
+    # ✅ Extract numeric score from evaluation text
+    marks = extract_marks(evaluation_text)
+
+    return evaluation_text, marks  # Return both feedback and marks
 
 @api_view(['GET'])
 def analyze_student_answers(request):
-    """
-    Fetches student answers, evaluates them using Gemini AI, and returns marks & feedback.
-    """
-    student_answers = StudentExam.objects.all()  # Fetch all answers
-
+    student_answers = StudentExam.objects.all()
+    
     if not student_answers.exists():
         return Response({"error": "No student answers found!"}, status=404)
 
     results = []
-
     for answer in student_answers:
-        # Ensure correct field name is used
-        evaluation = evaluate_student_answer(answer.question, answer.student_answer)  
+        # ✅ Get AI evaluation
+        evaluation = evaluate_student_answer(answer.question, answer.student_answer)
+
+        # ✅ Extract marks from AI response
+        score = extract_marks(evaluation)
+
+        # ✅ Update the database with AI-generated marks
+        answer.marks = score
+        answer.save()
         
         results.append({
             "student_name": answer.student_name,
             "question": answer.question,
             "answer": answer.student_answer,
-            "evaluation": evaluation  # AI-generated score & feedback
+            "evaluation": evaluation
         })
 
     return Response({"results": results})
 
+def student_login(request):
+    if request.method == "POST":
+        form = StudentLoginForm(request.POST)
+        if form.is_valid():
+            student_name = form.cleaned_data['student_name']
+            roll_no = form.cleaned_data['roll_no']
+
+            # Ensure marks has a default value
+            student, created = StudentExam.objects.get_or_create(
+                roll_no=roll_no,
+                defaults={
+                    'student_name': student_name,
+                    'question': "What is OOP in C++?",
+                    'marks': 0  # ✅ Ensure default marks is set
+                }
+            )
+
+            return redirect('answer_page', roll_no=student.roll_no)
+    else:
+        form = StudentLoginForm()
+
+    return render(request, 'test_evaluation/login.html', {'form': form})
 
 
-# from google.generativeai import configure, list_models
+# from django.shortcuts import render, get_object_or_404, redirect
+# import re
 
-# configure(api_key="AIzaSyDS99c8Ycr8razMXQJv4aOK_a_U6jIU3Ks")
+def extract_marks(evaluation_text):
+    """
+    Extracts numeric marks from AI evaluation response.
+    """
+    match = re.search(r"Score\s*\(out of\s*10\):\s*(\d+)", evaluation_text)
+    if match:
+        return int(match.group(1))  # Convert to integer
+    return 0  # Default to 0 if no score is found
 
-# models = list_models()
-# for model in models:
-#     print(model.name, "supports:", model.supported_generation_methods)
+def answer_page(request, roll_no):
+
+    # ✅ Check if student is eligible
+    if not EligibleStudent.objects.filter(roll_no=roll_no).exists():
+        return render(request, 'test_evaluation/not_eligible.html', {'roll_no': roll_no})
+    student = get_object_or_404(StudentExam, roll_no=roll_no)
+
+    if request.method == "POST":
+        form = AnswerForm(request.POST, instance=student)
+        if form.is_valid():
+            student = form.save()
+
+            # ✅ Call AI evaluation function and handle return values
+            result = evaluate_student_answer(student.question, student.student_answer)
+
+            if isinstance(result, tuple) and len(result) == 2:
+                evaluation, marks = result  # Unpack correctly
+            else:
+                evaluation = result  # If only one value is returned
+                marks = extract_marks(evaluation)  # Extract marks separately
+
+            student.evaluation_result = evaluation
+            student.marks = marks  # ✅ Store AI marks in the database
+            student.save()
+
+            # ✅ Show success message and redirect to results page
+            return render(request, 'test_evaluation/test_submitted.html', {
+                'student': student,
+                'results_url': reverse('results_page')
+            })
+
+    else:
+        form = AnswerForm(instance=student)
+
+    return render(request, 'test_evaluation/answer.html', {'student': student, 'form': form})
+
+
+
+def results_page(request):
+    if request.method == "POST":
+        roll_no = request.POST.get("roll_no")
+        try:
+            student = StudentExam.objects.get(roll_no=roll_no)
+            return render(request, 'test_evaluation/results.html', {
+                'student': student,
+                'evaluation_result': student.evaluation_result  # ✅ Pass AI evaluation to the template
+            }) 
+        except StudentExam.DoesNotExist:
+            return render(request, 'test_evaluation/results_login.html', {'error': "Roll number not found!"})
+
+    return render(request, 'test_evaluation/results_login.html')
+
+# def extract_marks(evaluation_text):
+#     """
+#     Extracts numeric marks from AI evaluation response.
+#     Assumes format: "Score (out of 10): X"
+#     """
+#     match = re.search(r'Score\s*\(out of\s*10\):\s*(\d+)', evaluation_text)
+#     if match:
+#         return int(match.group(1))  # Convert extracted score to integer
+#     return 0  # Return 0 if score is not found
+
+

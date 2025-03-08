@@ -1,5 +1,8 @@
 from django.contrib import admin
 from .models import StudentExam
+from .models import EligibleStudent
+
+admin.site.register(EligibleStudent)
 
 @admin.register(StudentExam)
 class StudentExamAdmin(admin.ModelAdmin):
